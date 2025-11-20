@@ -39,10 +39,22 @@ local g_timer_point = nil
 local g_loop_timer_map = {}
 local g_try_data_map = {}
 local g_logicing_map = {}
-local g_MAX_TRY_JOIN_DATE_LIST = 10000                 --最多缓存一万条重试待插入日志，如果超过，将暂定日志采集
 local g_try_cur_num = 0
 local g_is_over_map = setmetatable({}, {__mode = 'kv'})
 local g_config = nil
+
+-- 默认配置
+local DEFAULT_CONFIG = {
+    max_try_join_date_list = 100,         -- 最多缓存待插入日志数量
+    read_lines_per_time = 1000,           -- 每次读取的行数
+    gather_interval_base = 5,             -- 采集循环基础间隔(秒)
+    gather_interval_random = 3,           -- 采集循环随机间隔(秒)
+    retry_interval = 60,                  -- 重试插入间隔(秒)
+    retry_batch_size = 20,                -- 每次重试的批次大小
+    gather_data_retain_days = 7,          -- 采集数据保留天数
+    yesterday_read_until_hour = 0,        -- 昨天日志读取截止时间(小时)
+    yesterday_read_until_minute = 1,      -- 昨天日志读取截止时间(分钟)
+}
 
 local g_orm_type_strs = {}
 do
@@ -52,7 +64,7 @@ do
 end
 
 local function is_need_wait()
-    if g_try_cur_num >= g_MAX_TRY_JOIN_DATE_LIST then
+    if g_try_cur_num >= g_config.max_try_join_date_list then
         wait:wait("waiting_try")
         skynet.sleep(math.random(1, 100))
     end
@@ -80,7 +92,7 @@ local function try_insert(try_num)
             local data = one.data
             local info = one.info
             local orm = g_orm_map[info.tab_name]
-            local isok, ret = pcall(orm.create_one_entry, orm, data)
+            local isok, ret = pcall(orm.create_one_entry, orm, data, true)
             if isok and ret then
                 g_try_data_map[data] = nil
                 g_try_cur_num = g_try_cur_num - 1
@@ -90,7 +102,7 @@ local function try_insert(try_num)
         end
     end
 
-    if g_try_cur_num < g_MAX_TRY_JOIN_DATE_LIST then
+    if g_try_cur_num < g_config.max_try_join_date_list then
         wait:wakeup("waiting_try")
     end
 end
@@ -142,7 +154,7 @@ local function create_gather_loop(cluster_name, use_log_info)
     local file_path = use_log_info.file_path
     local split_str = string_util.split(cluster_name, ':')
     local svr_name, svr_id = split_str[1], tonumber(split_str[2])
-    local one_line = 100
+    local one_line = g_config.read_lines_per_time
     local frpc_cli = frpc_client:instance(frpc_client.FRPC_MODE.byid, svr_name, '.use_log'):set_svr_id(svr_id)
 
     local function gather_logic()
@@ -184,8 +196,8 @@ local function create_gather_loop(cluster_name, use_log_info)
                         end
                     elseif offset == last_offset then   --已读完
                         if date == cur_date then      --当天不管
-                        elseif next_date == cur_date then --昨天        --继续读1个小时(读到凌晨1点)，避免卡到文件关闭的间隙导致尾部部分没有读取
-                            local over_time = time_util.day_time(0, 1, 0, 0, cur_time)
+                        elseif next_date == cur_date then --昨天        --继续读指定时间，避免卡到文件关闭的间隙导致尾部部分没有读取
+                            local over_time = time_util.day_time(0, g_config.yesterday_read_until_hour, g_config.yesterday_read_until_minute, 0, cur_time)
                             if cur_time > over_time then
                                 g_is_over_map[entry] = true --标记已读完
                                 log.info_fmt("file read over yesterday cluster_name[%s] file_path[%s] fname[%s] date[%s] ret_str[%s]", cluster_name, file_path, fname, date, ret_str)
@@ -235,11 +247,11 @@ local function create_gather_loop(cluster_name, use_log_info)
                                 log.warn("wait create orm ", cluster_name, tab_name)
                                 wait:wait(tab_name)
                             else
-                                local res = orm:create_entry(data_list)                         --失败一般就是网络问题或者数据库出问题了
+                                local res = orm:create_entry(data_list, true)                         --失败一般就是网络问题或者数据库出问题了
                                 for i = 1, #res do
                                     if not res[i] then
                                         log.error("create_entry err ", tab_name, data_list[i])
-                                        add_try_data(tab_name, data_list[i])                    --记录一下，间隔时间重试
+                                        add_try_data(tab_name, data_list[i])                    --记录一下,间隔时间重试
                                     end
                                 end
                             end
@@ -267,32 +279,24 @@ local function create_gather_loop(cluster_name, use_log_info)
         end
     end
 
-    local new_timer = timer:new(timer.second * (10 + math.random(1, 5)), 0, xp_gather_logic):after_next()
+    local interval = g_config.gather_interval_base + math.random(1, g_config.gather_interval_random)
+    local new_timer = timer:new(timer.second * interval, 0, xp_gather_logic):after_next()
 
     g_loop_timer_map[time_key] = new_timer
-
-    g_timer_point = timer_point:new(timer_point.EVERY_DAY):builder(function()
-        local cur_Time = time_util.time()
-        for tab_name, use_log_info in pairs(g_log_info_map) do
-            local maxage = use_log_info.maxage
-            local pre_time = time_util.day_time(-maxage, 0, 0, 0, cur_Time)
-            --删除保留天数以外的数据
-            local orm = g_orm_map[tab_name]
-            if orm then
-                orm:idx_delete_entry({_time = {['$lte'] = pre_time}})
-            end
-
-            local pre_time = time_util.day_time(-7, 0, 0, 0, cur_Time)
-            local pre_date = tonumber(os.date("%Y%m%d", pre_time))
-            --只保留7天的采集数据
-            g_gater_ormobj:idx_delete_entry({cur_date = {['$lte'] = pre_date}})
-        end
-    end)
 end
 
 local CMD = {}
 
 function CMD.start(config)
+    -- 合并默认配置和用户配置
+    g_config = {}
+    for k, v in pairs(DEFAULT_CONFIG) do
+        g_config[k] = v
+    end
+    for k, v in pairs(config) do
+        g_config[k] = v
+    end
+
     local mysqlcli = nil
     skynet.fork(function()
         mysqlcli = mysqli.new_client('orm_db')
@@ -304,15 +308,15 @@ function CMD.start(config)
         :uint32('offset')       --文件采集的偏移量
         :uint32('file_size')    --文件大小
         :uint32('linenum')      --采集总行数
-        :set_cache(0, 500)      --永久缓存，5秒同步一次修改
+        :set_cache(0, 500)      --永久缓存，500毫秒同步一次
         :set_index('date_index', 'cur_date')
         :set_keys('cluster_name','file_name', 'cur_date')
         :builder(adapter)
 
         wait:wakeup("gater")
     end)
-    g_config = config
-    local node_map = config.node_map
+
+    local node_map = g_config.node_map
     for svr_name in pairs(node_map) do
         watch_syn_client.pwatch(svr_name, SYN_CHANNEL_NAME.log_desc_info .. '*', "handle_name_1", function(cluster_name, use_log_info)
             if not g_gater_ormobj then
@@ -323,7 +327,27 @@ function CMD.start(config)
         end)
     end
 
-    timer:new(timer.minute, 0, try_insert_data, 20)   --重试插入数据
+    -- 重试插入数据定时器
+    timer:new(timer.second * g_config.retry_interval, 0, try_insert_data, g_config.retry_batch_size)
+
+    -- 每天定时清理过期数据
+    g_timer_point = timer_point:new(timer_point.EVERY_DAY):builder(function()
+        local cur_Time = time_util.time()
+        for tab_name, use_log_info in pairs(g_log_info_map) do
+            local maxage = use_log_info.maxage
+            local pre_time = time_util.day_time(-maxage, 0, 0, 0, cur_Time)
+            --删除保留天数以外的数据
+            local orm = g_orm_map[tab_name]
+            if orm then
+                orm:idx_delete_entry({_time = {['$lte'] = pre_time}})
+            end
+
+            local pre_time = time_util.day_time(-g_config.gather_data_retain_days, 0, 0, 0, cur_Time)
+            local pre_date = tonumber(os.date("%Y%m%d", pre_time))
+            --只保留配置的采集数据天数
+            g_gater_ormobj:idx_delete_entry({cur_date = {['$lte'] = pre_date}})
+        end
+    end)
     
     return true
 end

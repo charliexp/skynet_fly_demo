@@ -26,7 +26,7 @@
 
             <el-col :span="3">
                 <el-button :loading="downloadLoading" style="margin:0 0 20px 20px;" type="primary" icon="el-icon-document" @click="handleDownload">
-                    导出数据
+                    {{ downloadText }}
                 </el-button>
             </el-col>
         </el-row>
@@ -46,14 +46,14 @@
                     end-placeholder="结束日期">
                 </el-date-picker>
             </div></el-col>
-            <el-col :span="4" v-for="item in indexs_list"><div>
-                <el-input v-for="it in item.list" v-model="indexs_value[it]" :placeholder="it"></el-input>
+            <el-col :span="4" v-for="item in indexs_list" :key="item.key"><div>
+                <el-input v-for="it in item.list" :key="it" v-model="indexs_value[it]" :placeholder="it"></el-input>
             </div></el-col>
         </el-row>
 
         <div>
             <el-table border stripe :data="data_list" style="width: 100%" height="600">
-                <el-table-column v-for="item in field_list" :label="item" resizable min-width="50" >
+                <el-table-column v-for="item in field_list" :key="item" :label="item" resizable min-width="50" >
                     <template slot-scope="scope">
                         {{ parseItemShow(item, scope.row[item]) }}
                     </template>
@@ -70,7 +70,7 @@
             <p>{{ this.pagenum + "/" + this.totalPageNum }}</p>
         </div>
     </div>
-  </template>
+</template>
 
 <script>
 
@@ -100,8 +100,18 @@ export default {
           loadingPre : false,
           loadingNext : false,
           downloadLoading : false,
+          downloadProgress : 0,
           bookType : 'xlsx',
           bookTypeOptions : ['xlsx', 'csv']
+        }
+    },
+
+    computed: {
+        downloadText() {
+            if (this.downloadLoading) {
+                return `导出中 ${this.downloadProgress}%`
+            }
+            return '导出数据'
         }
     },
 
@@ -174,21 +184,12 @@ export default {
             this.field_map = res.data.field_map
         },
 
-        async getLogList() {
-            if (this.pagenum != 1 && this.pageCachMap[this.pagenum]) {
-                this.data_list = this.pageCachMap[this.pagenum]
-                return;
-            }
-            if (this.pagenum == 1) {
-                this.pageCachMap = {}
-                this.cursor = null
-                this.nextOffset = 0
-            }
+        buildQuery() {
             let query = {}
-            if (this.setSvrType != "" && Number(this.setSvrType) != NaN) {
+            if (this.setSvrType != "" && !isNaN(Number(this.setSvrType))) {
                 query._svr_type = Number(this.setSvrType)
             }
-            if (this.setSvrId != "" && Number(this.setSvrId) != NaN) {
+            if (this.setSvrId != "" && !isNaN(Number(this.setSvrId))) {
                 query._svr_id = Number(this.setSvrId)
             }
             
@@ -206,7 +207,7 @@ export default {
                     if (ft < 20) {
                         const numbers = field_value.replace(/\s+/g, "").match(/-?\d+/g)?.map(Number) || [];
                         const regexs = field_value.match(/(>=|<=|>|<)/g) || [];
-                        if (Number(field_value) != NaN) {
+                        if (!isNaN(Number(field_value))) {
                             query[field_name] = Number(field_value)
                         }
                         
@@ -238,6 +239,21 @@ export default {
                     }
                 }
             }
+            return query
+        },
+
+        async getLogList() {
+            if (this.pagenum != 1 && this.pageCachMap[this.pagenum]) {
+                this.data_list = this.pageCachMap[this.pagenum]
+                return;
+            }
+            if (this.pagenum == 1) {
+                this.pageCachMap = {}
+                this.cursor = null
+                this.nextOffset = 0
+            }
+
+            const query = this.buildQuery()
 
             const res = await getLogList({
                 logname : this.logName,
@@ -252,7 +268,6 @@ export default {
             this.pagenum = data.pagenum
             this.nextOffset = data.next_offset
 
-            //console.log(">>> data >>> ", data)
             if (data.count) {
                 this.count = data.count
                 this.totalPageNum = Math.ceil(this.count / this.pagecount)
@@ -264,6 +279,23 @@ export default {
                 this.data_list = []
             }
             this.pageCachMap[this.pagenum] = this.data_list
+            
+            return data
+        },
+
+        // 新增：获取指定页的数据（不更新当前页面状态）
+        async fetchPageData(pagenum, cursor, nextOffset) {
+            const query = this.buildQuery()
+
+            const res = await getLogList({
+                logname : this.logName,
+                pagenum : pagenum,
+                cursor : cursor,
+                query : query,
+                next_offset : nextOffset,
+            })
+            
+            return res.data
         },
 
         parseItemShow(field_name, field_value) {
@@ -283,7 +315,7 @@ export default {
             this.pagenum = 1
             this.data_list = []
             this.loadingFirst = true
-            this.getLogList()
+            await this.getLogList()
             this.loadingFirst = false
         },
 
@@ -297,7 +329,7 @@ export default {
             this.pagenum -= 1
             this.data_list = []
             this.loadingPre = true
-            this.getLogList()
+            await this.getLogList()
             this.loadingPre = false
         },
 
@@ -311,40 +343,119 @@ export default {
             this.pagenum += 1
             this.data_list = []
             this.loadingNext = true
-            this.getLogList()
+            await this.getLogList()
             this.loadingNext = false
         },
 
+        // 重构后的下载方法
+        async handleDownload() {
+            if (this.downloadLoading) {
+                this.$notify.warning({
+                    title: '提示',
+                    message: '正在导出中，请稍候...'
+                })
+                return
+            }
 
-        handleDownload() {
-            this.downloadLoading = true
-            this.pagenum = 1
-            const intervalId = setInterval(()=>{
-                if (this.pagenum < this.totalPageNum) {
-                    this.onClickNext()
-                } else {
-                    clearInterval(intervalId)
-                    let list = []
-                    for (let key in this.pageCachMap) {
-                        let ls = this.pageCachMap[key]
-                        list.push.apply(list, ls)
+            // 确认导出数量
+            if (this.totalPageNum === 0) {
+                this.$notify.warning({
+                    title: '提示',
+                    message: '暂无数据可导出'
+                })
+                return
+            }
+
+            const totalCount = this.count
+            if (totalCount > 10000) {
+                const confirm = await this.$confirm(
+                    `当前共有 ${totalCount} 条数据，导出可能需要较长时间，是否继续？`,
+                    '提示',
+                    {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning'
                     }
-                    console.log("handleDownload >>> ", list)
-                    const data = this.formatJson(this.field_list, list)
-                    import('@/vendor/Export2Excel').then(excel => {
-                        excel.export_json_to_excel({
-                        header: this.field_list,
-                        data,
-                        filename: this.logName,
-                        autoWidth: true,
-                        bookType: this.bookType
-                        })
-                        this.downloadLoading = false
-                        console.log("handleDownload over >>> ", list)
-                    })
+                ).catch(() => false)
+
+                if (!confirm) {
+                    return
                 }
-            }, 1000)
+            }
+
+            this.downloadLoading = true
+            this.downloadProgress = 0
+
+            try {
+                // 保存当前页面状态
+                const currentPagenum = this.pagenum
+                const currentCursor = this.cursor
+                const currentNextOffset = this.nextOffset
+
+                // 收集所有数据
+                const allData = []
+                let tempCursor = null
+                let tempNextOffset = 0
+
+                // 串行请求所有页面数据
+                for (let page = 1; page <= this.totalPageNum; page++) {
+                    // 检查缓存
+                    if (this.pageCachMap[page]) {
+                        allData.push(...this.pageCachMap[page])
+                    } else {
+                        // 请求数据
+                        const data = await this.fetchPageData(page, tempCursor, tempNextOffset)
+                        
+                        if (Array.isArray(data.list) && data.list.length > 0) {
+                            allData.push(...data.list)
+                            // 缓存数据
+                            this.pageCachMap[page] = data.list
+                        }
+
+                        // 更新游标
+                        tempCursor = data.cursor
+                        tempNextOffset = data.next_offset
+                    }
+
+                    // 更新进度
+                    this.downloadProgress = Math.floor((page / this.totalPageNum) * 100)
+                }
+
+                // 恢复页面状态
+                this.pagenum = currentPagenum
+                this.cursor = currentCursor
+                this.nextOffset = currentNextOffset
+
+                console.log("导出数据总数:", allData.length)
+
+                // 导出数据
+                const data = this.formatJson(this.field_list, allData)
+                const excel = await import('@/vendor/Export2Excel')
+                excel.export_json_to_excel({
+                    header: this.field_list,
+                    data,
+                    filename: `${this.logName}_${new Date().toLocaleDateString()}`,
+                    autoWidth: true,
+                    bookType: this.bookType
+                })
+
+                this.$notify.success({
+                    title: '成功',
+                    message: `成功导出 ${allData.length} 条数据`
+                })
+
+            } catch (error) {
+                console.error('导出失败:', error)
+                this.$notify.error({
+                    title: '导出失败',
+                    message: error.message || '导出过程中发生错误'
+                })
+            } finally {
+                this.downloadLoading = false
+                this.downloadProgress = 0
+            }
         },
+
         formatJson(filterVal, jsonData) {
             return jsonData.map(v => filterVal.map(j => {
                 return this.parseItemShow(j, v[j])
@@ -353,3 +464,4 @@ export default {
     }
 }
 </script>
+
