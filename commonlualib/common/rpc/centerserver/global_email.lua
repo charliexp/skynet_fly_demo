@@ -15,7 +15,7 @@ function M.add(title, content, item_list, vaild_time)
         return
     end
 
-    return table.unpack(ret.result)
+    return ret:unpack()
 end
 
 --删除邮件 
@@ -27,7 +27,7 @@ function M.del(guid)
         return
     end
 
-    return table.unpack(ret.result)
+    return ret:unpack()
 end
 
 --修改邮件
@@ -39,7 +39,7 @@ function M.change(guid, title, content, item_list, vaild_time)
         return
     end
 
-    return table.unpack(ret.result)
+    return ret:unpack()
 end
 
 return M

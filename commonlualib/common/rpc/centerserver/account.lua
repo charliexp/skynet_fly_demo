@@ -16,7 +16,7 @@ function M.register(account_info, channel)
         return
     end
 
-    return table.unpack(ret.result, 1, 3)
+    return ret:unpack()
 end
 
 --认证登录 
@@ -28,7 +28,7 @@ function M.auth(account, password)
         log.error("认证登录 出错 >>> ", err, errcode)
         return
     end
-    return table.unpack(ret.result, 1, 3)
+    return ret:unpack()
 end
 
 return M

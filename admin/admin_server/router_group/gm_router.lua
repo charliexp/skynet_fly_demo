@@ -26,7 +26,7 @@ return function(group)
             rsp_body.set_rsp(c, nil, CODE.ERR_SERVER, "server err")
             return
         end
-        local res_list, err = table.unpack(ret.result)
+        local res_list, err = ret:unpack()
         if not res_list then
             rsp_body.set_rsp(c, nil, CODE.ERR_SERVER, err)
         else
@@ -52,12 +52,12 @@ return function(group)
             rsp_body.set_rsp(c, nil, CODE.ERR_SERVER, "server err")
             return
         end
-        local ret, err = table.unpack(ret.result)
+        local result, err = ret:unpack()
         
-        if not ret then
+        if not result then
             rsp_body.set_rsp(c, nil, CODE.ERR_SERVER, err)
         else
-            rsp_body.set_rsp(c, ret)
+            rsp_body.set_rsp(c, result)
         end
     end)
 end

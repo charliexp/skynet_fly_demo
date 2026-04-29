@@ -188,7 +188,7 @@ local function create_gather_loop(cluster_name, use_log_info)
                 if not ret then
                     log.error("gather err ", file_path, fname, errcode, errmsg)
                 else
-                    local isok, ret_str, last_offset, file_size = tunpack(ret.result)
+                    local isok, ret_str, last_offset, file_size = ret:unpack()
                     if not isok then                --文件不存在
                         if date ~= cur_date then
                             log.info_fmt("file open faild cluster_name[%s] file_path[%s] fname[%s] date[%s] ret_str[%s]", cluster_name, file_path, fname, date, ret_str)

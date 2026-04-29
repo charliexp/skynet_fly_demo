@@ -9,7 +9,6 @@ local skynet = require "skynet"
 local log = require "skynet-fly.log"
 
 local tonumber = tonumber
-local table = table
 local pairs = pairs
 
 local g_svr_id = env_util.get_svr_id()
@@ -54,7 +53,7 @@ function M.register(player_id, account)
         return
     end
 
-    return table.unpack(ret.result)
+    return ret:unpack()
 end
 
 -- 创建token
@@ -116,7 +115,7 @@ function M.get_player_info(player_id, field_map)
             log.error("get_player_info err ", player_id, code, errmsg)
             return nil
         end
-        return table.unpack(ret.result)
+        return ret:unpack()
     end
 end
 
@@ -185,7 +184,7 @@ function M.call_player_hall(player_id, ...)
             log.error("call_player_hall err ", code, errmsg, player_id, ...)
             return
         end
-        return table.unpack(ret.result)
+        return ret:unpack()
     end
 end
 
