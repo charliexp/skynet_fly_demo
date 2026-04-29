@@ -72,7 +72,7 @@ local function monitor(svr_name)
     for _,v in ipairs(ret) do
         svr_info_map[v.cluster_name] = {}
         for server_id,server_info in pairs(v.result[1]) do
-            server_id = server_id:sub(2, server_id:len())
+            local sid = server_id:sub(2, server_id:len())
             local split = string_util.split(server_info,' ')
             local mem = tonumber(split[1])
             local name = split[4]
@@ -88,7 +88,7 @@ local function monitor(svr_name)
             end
             if pre_name == "hot_container" then
                 local spstrs = string_util.split(name, '-')
-                server_name_map[server_id] = spstrs[1]
+                server_name_map[sid] = spstrs[1]
                 if not svr_info_map[v.cluster_name][name] then
                     svr_info_map[v.cluster_name][name] = {
                         mem = 0,
@@ -122,8 +122,8 @@ local function monitor(svr_name)
     if ret then
         for _,v in ipairs(ret) do
             for server_id,server_info in pairs(v.result[1]) do
-                server_id = server_id:sub(2, server_id:len())
-                local name_server = server_name_map[server_id]
+                local sid = server_id:sub(2, server_id:len())
+                local name_server = server_name_map[sid]
                 if name_server and svr_info_map[v.cluster_name] and svr_info_map[v.cluster_name][name_server] then
                     local svr_info = svr_info_map[v.cluster_name][name_server]
                     svr_info.task = svr_info.task + server_info.task
@@ -146,8 +146,8 @@ local function monitor(svr_name)
     if ret then
         for _,v in ipairs(ret) do
             for server_id,cmem in pairs(v.result[1]) do
-                server_id = server_id:sub(2, server_id:len())
-                local name_server = server_name_map[server_id]
+                local sid = server_id:sub(2, server_id:len())
+                local name_server = server_name_map[sid]
                 if name_server and svr_info_map[v.cluster_name] and svr_info_map[v.cluster_name][name_server] then
                     local svr_info = svr_info_map[v.cluster_name][name_server]
                     svr_info.cmem = svr_info.cmem + math_util.number_div_str(cmem / 1024 * 100, 2)  --kb 保持2位小数
@@ -160,11 +160,11 @@ local function monitor(svr_name)
     end
 
     for cluster_name,server_info in pairs(svr_info_map) do
-        cluster_name = cluster_name:gsub(':', '-')
+        local cname = cluster_name:gsub(':', '-')
         for server_name,info in pairs(server_info) do
-            local file_path = g_monitor_log_dir .. cluster_name .. '/'
+            local file_path = g_monitor_log_dir .. cname .. '/'
             local file_name = server_name .. '.log'
-            rigister_rotate(cluster_name,server_name,file_path,file_name)
+            rigister_rotate(cname,server_name,file_path,file_name)
             local fname = string.format("%s%s",file_path,file_name)
             local isok, err = file_util.mkdir(file_path)
             if not isok then
