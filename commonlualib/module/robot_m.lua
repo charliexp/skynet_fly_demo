@@ -116,10 +116,12 @@ local function create_one_robot_logic(idx)
     local m_HALL_SERVER_HANDLE = {}
 
     local function accept_match(body)
+        --log.info("接受匹配 >>> ", idx, m_player_id)
         m_hall_rpc:push(PACK.hallserver_match.AcceptMatchReq, body)
     end
     --通知匹配成功
     m_HALL_SERVER_HANDLE[PACK.hallserver_match.MatchGameNotice] = function(body)
+        --log.info("收到匹配成功通知 >>> ", idx, m_player_id)
         --请求接受匹配
         timer:new(math.random(1, 10) * timer.second, 1, accept_match, body)
     end
@@ -129,13 +131,14 @@ local function create_one_robot_logic(idx)
         local host = body.gamehost
         local token = body.gametoken
 
+        --log.info("收到进入游戏通知 >>> ", idx, m_player_id, host, body.table_id)
         m_game_table_id = body.table_id
         local isok
         isok,m_game_fd = pcall(websocket.connect, "ws://" .. host)
         if isok and m_game_fd then
             socket.onclose(m_game_fd, function(close_fd)
                 websocket.close(close_fd)
-                --log.info("m_game_fd close:", m_game_fd, close_fd)
+                --log.info("游戏服连接关闭 >>> ", idx, m_player_id, m_game_fd, close_fd)
                 if close_fd == m_game_fd then
                     m_game_fd = nil
                     m_game_rpc:close()
@@ -157,9 +160,18 @@ local function create_one_robot_logic(idx)
                 end
                 m_game_scene:on_handle(packid, packbody)
             end)
-            if m_game_scene:on_connect(m_player_id, m_game_table_id, token, m_game_rpc) then
+
+            local function close_game_fd()
+                websocket.close(m_game_fd)
+                m_game_rpc:close()
+                m_game_fd = nil
+            end
+
+            if m_game_scene:on_connect(m_player_id, m_game_table_id, token, m_game_rpc, close_game_fd) then
+                --log.info("进入游戏成功 >>> ", idx, m_player_id, m_game_table_id)
                 m_state = STATE_ENUM.GAMEING
             else
+                --log.warn("进入游戏失败(on_connect) >>> ", idx, m_player_id, m_game_table_id)
                 websocket.close(m_game_fd)
             end
         else
@@ -171,8 +183,9 @@ local function create_one_robot_logic(idx)
     --错误消息处理
     m_HALL_SERVER_HANDLE[PACK.errors.Error] = function(body)
         local code = body.code
-        local _ = body.msg
-        local _ = body.pack_id
+        local errmsg = body.msg
+        local pack_id = body.pack_id
+        --log.warn("大厅服错误消息 >>> ", idx, m_player_id, code, errmsg, pack_id)
         if code == errorcode.MATCHING then
             m_hall_matching = true
         end
@@ -191,10 +204,10 @@ local function create_one_robot_logic(idx)
             return
         end
         --大厅服消息处理
-        --log.info("hallserver_handle >>> ", pack_id, packbody)
+        --log.info("hallserver_handle >>> ", idx, m_player_id, packid, packbody)
         local handle = m_HALL_SERVER_HANDLE[packid]
         if not handle then
-            --log.error("drop hallserver_handle pack_id = ", pack_id)
+            --log.warn("drop hallserver_handle pack_id = ", idx, m_player_id, packid)
         else
             handle(packbody)
         end
@@ -206,15 +219,16 @@ local function create_one_robot_logic(idx)
         if m_hall_heart_timer then
             m_hall_heart_timer:cancel()
         end
+        --log.info("尝试登录大厅 >>> ", idx, m_account)
         --尝试登录
         local req = {
             account = m_account,
             password = m_password,
         }
         local isok,code,bodystr = pcall(httpc.request, "POST", get_login_server_host(), '/user/login', nil, g_header, json.encode(req))
-        --log.info("请求登录:", idx, isok, code, bodystr)
+        --log.info("请求登录结果:", idx, isok, code, bodystr)
         if not isok then
-            --log.error("请求登录 网络错误:", idx, isok, tostring(code))
+            log.error("请求登录 网络错误:", idx, isok, tostring(code))
             skynet.sleep(math.random(timer.second * 5, timer.second * 15))
             return
         end
@@ -224,11 +238,12 @@ local function create_one_robot_logic(idx)
             m_player_id = data.player_id
             local token = data.token
             local host = data.host
+            --log.info("登录loginserver成功 连接大厅 >>> ", idx, m_player_id, host)
             isok,m_hall_fd = pcall(websocket.connect, "ws://" .. host)
             if isok and m_hall_fd then
                 socket.onclose(m_hall_fd, function(close_fd)
                     websocket.close(close_fd)
-                    --log.info("hall close fd :", m_player_id, m_hall_fd, close_fd)
+                    --log.info("大厅连接关闭 >>> ", idx, m_player_id, m_hall_fd, close_fd)
                     if close_fd == m_hall_fd then
                         m_hall_fd = nil
                         m_hall_rpc:close()
@@ -247,6 +262,7 @@ local function create_one_robot_logic(idx)
                     log.warn("登录大厅失败 >>> ", m_player_id, packid, packbody, m_hall_fd)
                     websocket.close(m_hall_fd)
                 else
+                    --log.info("登录大厅成功 >>> ", idx, m_player_id)
                     m_hall_matching = false
                     --登录大厅成功
                     m_state = STATE_ENUM.ONLINE_HALL
@@ -263,6 +279,7 @@ local function create_one_robot_logic(idx)
                         local pre_time = skynet.now()
                         local packid = m_hall_rpc:req(PACK.login.HeartReq, heart_req)
                         if not packid or packid == PACK.errors.Error then
+                            log.warn("大厅心跳失败，关闭连接 >>> ", idx, m_player_id)
                             websocket.close(m_hall_fd)
                             if m_hall_heart_timer then
                                 m_hall_heart_timer:cancel()
@@ -282,16 +299,18 @@ local function create_one_robot_logic(idx)
                 skynet.sleep(math.random(timer.second * 5, timer.second * 15))
             end
         else
-            if body.code == CODE.NOT_USER then   --用户不存在 去注册 
+            if body.code == CODE.NOT_USER then   --用户不存在 去注册
+                --log.info("账号不存在 去注册 >>> ", idx, m_account)
                 m_state = STATE_ENUM.UNREGITER
             else
-                --log.warn("请求登录 登录失败:",idx, code, bodystr)
+                log.warn("请求登录 登录失败:",idx, code, bodystr)
             end
         end
     end
 
     --未注册
     m_STATE_HANDLE[STATE_ENUM.UNREGITER] = function()
+        --log.info("尝试注册账号 >>> ", idx, m_account)
         --尝试注册
         local req = {
             account = m_account,
@@ -300,15 +319,16 @@ local function create_one_robot_logic(idx)
         }
 
         local isok,code,bodystr = pcall(httpc.request, "POST", get_login_server_host(), '/user/signup', nil, g_header, json.encode(req))
-        --log.info("请求注册:", idx, isok, code, bodystr)
+        --log.info("请求注册结果:", idx, isok, code, bodystr)
         if not isok then
-            --log.error("请求注册 网络错误:", idx, isok, tostring(code))
+            log.error("请求注册 网络错误:", idx, isok, tostring(code))
             skynet.sleep(math.random(timer.second * 5, timer.second * 15))
             return
         end
 
         local body = json.decode(bodystr)
         if body.code == CODE.OK or body.code == CODE.EXISTS_USER then
+            --log.info("注册成功，切换到登录状态 >>> ", idx, m_account)
             m_state = STATE_ENUM.UNLOGIN_HALL
         else
             log.warn("请求注册 注册失败:",idx, code, bodystr)
@@ -319,11 +339,14 @@ local function create_one_robot_logic(idx)
     --大厅在线
     m_STATE_HANDLE[STATE_ENUM.ONLINE_HALL] = function()
         if not m_hall_fd then
+            log.warn("大厅连接断开，切换到未登录状态 >>> ", idx, m_player_id)
             --去重启登录
             m_state = STATE_ENUM.UNLOGIN_HALL
+            return
         end
         --匹配游戏
         if not m_hall_matching then
+            --log.info("发起匹配请求 >>> ", idx, m_player_id)
             local play_type = nil
             if g_config.game_name == "chinese_chess" then
                 play_type = schema.enums.play_type.CC_RANKING
@@ -334,15 +357,19 @@ local function create_one_robot_logic(idx)
             if not packid or packid == PACK.errors.Error then
                 log.warn("请求匹配失败 >>> ", m_player_id, packid, packbody)
             else
+                --log.info("请求匹配成功，等待匹配结果 >>> ", idx, m_player_id)
                 m_hall_matching = true
             end
+        else
+            --log.info("匹配中，等待匹配结果 >>> ", idx, m_player_id)
         end
     end
 
     --游戏中
     m_STATE_HANDLE[STATE_ENUM.GAMEING] = function()
-        --log.info("m_game_fd:", m_game_fd)
+        log.info("游戏中状态检测 >>> ", idx, m_player_id, "m_game_fd:", m_game_fd)
         if not m_game_fd then
+            log.info("游戏连接已断开，切换到大厅在线状态 >>> ", idx, m_player_id)
             --去重启登录
             m_game_scene:clear()
             m_state = STATE_ENUM.ONLINE_HALL
@@ -351,6 +378,7 @@ local function create_one_robot_logic(idx)
     end
 
     local function state_loop()
+        --log.info("状态循环 >>> ", idx, m_player_id, "state:", m_state, "hall_fd:", m_hall_fd, "game_fd:", m_game_fd, "matching:", m_hall_matching)
         local handle = m_STATE_HANDLE[m_state]
         assert(handle, "not exists handle = " .. m_state)
         handle()

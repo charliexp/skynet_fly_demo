@@ -50,15 +50,19 @@ local function kick_out_all(table_id, reason)
 		log.warn("kick_out_all not exists table_id = ",table_id)
 		return
 	end
+	--log.info("kick_out_all >>> ", table_id, "reason:", reason)
 	local t_info = g_table_map[table_id]
 	local player_map = t_info.player_map
 	local ok = true
 	for player_id,player in pairs(player_map) do
 		if player_map[player_id] then
+			--log.info("踢出玩家 >>> ", table_id, player_id)
 			local isok,err,errmsg = skynet.call(player.hall_server_id,'lua','leave_table',player_id, reason)
 			if not isok then
 				ok = false
-				log.warn("kick_player err ",player_id,err,errmsg)
+				--log.warn("kick_player err ", table_id, player_id, err, errmsg)
+			else
+				--log.info("踢出玩家成功 >>> ", table_id, player_id)
 			end
 		end
 	end

@@ -3,6 +3,7 @@ local time_util = require "skynet-fly.utils.time_util"
 local table_util = require "skynet-fly.utils.table_util"
 local skynet = require "skynet"
 local state_data = require "skynet-fly.hotfix.state_data"
+local timer = require "skynet-fly.timer"
 
 local assert = assert
 local tinsert = table.insert
@@ -38,12 +39,28 @@ function M.on_login(player_id)
         heart_time = os.time()
     }
     tinsert(g_player_list, player_id)
+
+    --登录后10秒没有进入房间则踢掉
+    g_player_map[player_id].join_check_timer = timer:new(timer.second * 10, 1, function()
+        if not g_player_map[player_id] then
+            return  --玩家已经登出，无需处理
+        end
+        local table_id = g_logic_info.hall_interface:get_table_id(player_id)
+        if table_id == '0:0' then
+            --log.info("登录后10秒未进入房间，踢出玩家 >>> ", player_id)
+            g_logic_info.hall_interface:goout(player_id, "not join table timeout")
+        end
+    end)
 end
 
 --登出
 function M.on_loginout(player_id)
     --log.info("on_loginout >>> ", player_id)
     assert(g_player_map[player_id], "is not exists " .. player_id)
+    if g_player_map[player_id].join_check_timer then
+        g_player_map[player_id].join_check_timer:cancel()
+        g_player_map[player_id].join_check_timer = nil
+    end
     g_player_map[player_id] = nil
     for i = 1,#g_player_list do
         if g_player_list[i] == player_id then

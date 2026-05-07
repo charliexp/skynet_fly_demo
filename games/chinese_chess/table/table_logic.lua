@@ -91,7 +91,7 @@ end
 
 --操作超时
 local function doing_time_out(self, seat_player)
-    --log.info("doing_time_out >>> ", seat_player)
+    --log.info("操作超时 >>> ", self.m_table_id, "seat_id:", seat_player:get_seat_id())
     seat_player:doing_end()
 
     local seat_id = seat_player:get_seat_id()
@@ -102,6 +102,7 @@ local function doing_time_out(self, seat_player)
             break
         end
     end
+    --log.info("操作超时 触发游戏结束 >>> ", self.m_table_id, "win_seat_id:", win_seat_id)
     self:game_over(win_seat_id)
 end
 
@@ -143,6 +144,7 @@ function M:send_game_state(seat_player)
         return msg_body --rpc回复就行
     else
         self.m_game_msg:game_state_res(msg_body)        --广播
+        --log.info("发送游戏当前状态信息 >>>", msg_body)
 	end
 end
 
@@ -158,6 +160,7 @@ function M:set_next_doing(seat_id)
 
     self.m_can_move_map = chess_rule.get_all_can_move_map(self.m_chess_list,self.m_chess_map,self.m_boss_chess_map,self.m_next_doing.team_type)
     --log.info("m_can_move_map:",m_next_doing.team_type,m_can_move_map)
+    local can_move_count = 0
     for chess_id,can_move_list in pairs(self.m_can_move_map) do
         local row_list = {}
         local col_list = {}
@@ -170,9 +173,12 @@ function M:set_next_doing(seat_id)
             row_list = row_list,
             col_list = col_list,
         })
+        can_move_count = can_move_count + 1
     end
 
+    --log.info("set_next_doing >>> ", self.m_table_id, "seat_id:", seat_id, "player_id:", player.player_id, "can_move_count:", can_move_count)
     if not next(self.m_can_move_map) then
+        --log.info("set_next_doing: 无棋可走，触发游戏结束 >>> ", self.m_table_id, "seat_id:", seat_id)
         return false
     end
 
@@ -182,8 +188,8 @@ end
 
 --发送接下来谁操作
 function M:send_next_doing()
-	--log.error("send_next_doing:",m_next_doing)
 	self:up_doing_time()
+	--log.info("send_next_doing >>> ", self.m_table_id, "next_player:", self.m_next_doing.player_id, "remain_once:", self.m_next_doing.remain_once_time, "remain_total:", self.m_next_doing.remain_total_time)
 	self.m_game_msg:next_doing(self.m_next_doing)
 end
 
@@ -193,7 +199,7 @@ end
 -----------------------------------------------------------------------
 --开始游戏
 function M:game_start()
-    --log.info("游戏开始:", m_table_id)
+    --log.info("游戏开始 >>> ", self.m_table_id)
     self.m_game_state = GAME_STATE.playing
     self.m_game_seat_id_list = {}
     self.m_join_time_out:cancel()
@@ -222,7 +228,7 @@ function M:game_start()
 end
 --游戏结束
 function M:game_over(win_seat_id)
-    --log.info("游戏结束:",win_seat_id, self.m_table_id)
+    --log.info("游戏结束 >>> ", self.m_table_id, "win_seat_id:", win_seat_id)
     self.m_game_state = GAME_STATE.over
     --踢出所有玩家
     for _,seat_player in ipairs(self.m_seat_list) do
@@ -305,6 +311,7 @@ function M:game_over(win_seat_id)
         end
     end)
 
+    --log.info("游戏结束 kick_out_all >>> ", self.m_table_id, "win_player_id:", self.m_win_player_id)
     self.m_interface_mgr:kick_out_all("game over")
     return true
 end
@@ -321,9 +328,9 @@ function M:enter(player_id)
     local alloc_seat_id = nil
     for seat_id,seater in ipairs(self.m_seat_list) do
         if seater:is_empty() then
-            --log.info("玩家坐下:",player_id)
+            --log.info("玩家坐下 >>> ", self.m_table_id, player_id, seat_id)
             if not seater:enter(player_id, seat_id) then
-                log.warn("坐下失败 ", player_id, seat_id)
+                log.warn("坐下失败 ", self.m_table_id, player_id, seat_id)
                 return
             end
             self.m_player_seat_map[player_id] = seat_id
@@ -334,10 +341,11 @@ function M:enter(player_id)
     end
 
     if not alloc_seat_id then
-        log.info("进入房间失败 ",player_id)
+        --log.warn("进入房间失败(座位已满) >>> ", self.m_table_id, player_id)
         return
     end
   
+    --log.info("进入房间成功 >>> ", self.m_table_id, player_id, "enter_num:", self.m_enter_num)
     if self.m_enter_num >= 2 then
         skynet.fork(self.game_start, self)
     end
@@ -347,10 +355,10 @@ end
 
 --玩家离开
 function M:leave(player_id, reason)
-    --log.info("leave ", player_id, reason)
+    --log.info("玩家离开桌子 >>> ", self.m_table_id, player_id, "reason:", reason)
     local seat_id = self.m_player_seat_map[player_id]
     if not seat_id then
-        log.warn("not in table ",player_id)
+        log.warn("not in table ", self.m_table_id, player_id)
         return
     end
 
@@ -364,7 +372,7 @@ function M:leave(player_id, reason)
         self.m_player_seat_map[player_id] = nil
     end
 
-    --log.info("离开房间成功 ",player_id)
+    --log.info("离开房间成功 >>> ", self.m_table_id, player_id)
 
     return seat_id
 end
@@ -399,9 +407,9 @@ end
 
 --移动棋子
 function M:move_req(player_id,pack_id,pack_body)
-    --log.info("move_req >>>> ", player_id,pack_id,pack_body)
+    --log.info("move_req >>> ", self.m_table_id, player_id, "chess_id:", pack_body.chess_id, "to:", pack_body.move_row, pack_body.move_col)
     if self.m_game_state ~= GAME_STATE.playing then
-        log.warn("not is playing state ", self.m_game_state)
+        log.warn("not is playing state ", self.m_table_id, player_id, self.m_game_state)
         return
     end
     local seat_id = self.m_player_seat_map[player_id]
@@ -456,15 +464,17 @@ function M:move_req(player_id,pack_id,pack_body)
     chess_rule.move_chess(self.m_chess_list,self.m_chess_map,self.m_boss_chess_map,move_chess,{row = move_row,col = move_col})
 
     seat_player:doing_end()
-    --log.error("moveRes:",pack_body)
+    --log.info("move_res 广播走棋结果 >>> ", self.m_table_id, player_id)
     self.m_game_msg:move_res(pack_body)
 
     table.insert(self.m_record_info.move_pos_list, pack_body)
 
     local next_seat_id = (seat_id % 2) + 1
+    --log.info("检查下一步操作 >>> ", self.m_table_id, "next_seat_id:", next_seat_id)
     if self:set_next_doing(next_seat_id) then
         self:send_next_doing()
     else
+        --log.info("触发游戏结束(无棋可走) >>> ", self.m_table_id, "win_seat_id:", seat_id)
         self:game_over(seat_id)
     end
     return true
