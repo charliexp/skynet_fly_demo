@@ -82,7 +82,7 @@ function M.table_creator(table_id, table_name, play_type)
 		},
 
 		handle_end_rpc = function(player_id, pack_id, pack_body, rsp_session, handle_res)
-			local ret, errcode, errmsg = tunpack(handle_res)
+			local ret, errcode, errmsg = tunpack(handle_res, 1, handle_res.n)
 			if ret then	--rpc回复
 				if ret ~= true and rsp_session then
 					m_rsp_msg:rsp_msg(player_id, pack_id, ret, rsp_session)
