@@ -47,7 +47,7 @@ end
 
 --清理数据
 function M:clear()
-    log.info("游戏场景清理 >>> ", self.m_player_id, self.m_table_id)
+    --log.info("游戏场景清理 >>> ", self.m_player_id, self.m_table_id)
     self.m_table_id = nil
     self.m_send_msg = nil
     self.m_game_data = nil
@@ -68,7 +68,7 @@ function M:on_connect(player_id, table_id, token, game_rpc, close_game_fd_func)
     self.m_table_id = table_id
     self.m_game_rpc = game_rpc
     self.close_game_fd_func = close_game_fd_func
-    log.info("on_connect 请求登录游戏服 >>> ", player_id, table_id)
+    --log.info("on_connect 请求登录游戏服 >>> ", player_id, table_id)
     --请求登录
     local login_req = {
         token = token,
@@ -79,7 +79,7 @@ function M:on_connect(player_id, table_id, token, game_rpc, close_game_fd_func)
         log.warn("登录游戏服失败 >>>", self.m_player_id, packid, packbody)
         return false
     else
-        log.info("登录游戏服成功 >>> ", player_id, table_id)
+        --log.info("登录游戏服成功 >>> ", player_id, table_id)
          --发送心跳包
          if self.m_heart_timer then
             self.m_heart_timer:cancel()
@@ -111,7 +111,7 @@ function M:on_connect(player_id, table_id, token, game_rpc, close_game_fd_func)
         if not packid or packid == PACK.errors.Error then
             log.warn("请求进入桌子 失败 >>> ", self.m_player_id, packid, packbody)
         else
-            log.info("请求进入桌子 成功 >>> ", self.m_player_id, table_id)
+            --log.info("请求进入桌子 成功 >>> ", self.m_player_id, table_id)
             self:req_game_state()
         end
     end
@@ -127,16 +127,16 @@ function M:on_handle(pack_id, packbody)
         --状态通知
         HANDLE_FUNC_TEMPLATE[PACK.chinese_chess_game.gameStateRes] = function(self, body)
             self.m_game_data = body
-            log.info("收到状态通知 >>> ", self.m_player_id, body)
+            --log.info("收到状态通知 >>> ", self.m_player_id, body)
             if body.state == GAME_STATE.over then
-                log.info("收到状态通知 关闭连接 >>> ", self.m_player_id, body)
+                --log.info("收到状态通知 关闭连接 >>> ", self.m_player_id, body)
                 self.close_game_fd_func()
             end
         end
 
         --通知操作
         HANDLE_FUNC_TEMPLATE[PACK.chinese_chess_game.nextDoing] = function(self, body)
-            log.info("收到nextDoing通知 >>> ", self.m_player_id, "next_player:", body.player_id, "remain_once:", body.remain_once_time, "remain_total:", body.remain_total_time)
+            --log.info("收到nextDoing通知 >>> ", self.m_player_id, "next_player:", body.player_id, "remain_once:", body.remain_once_time, "remain_total:", body.remain_total_time)
             if not self.m_game_data then
                 log.warn("收到nextDoing但m_game_data为nil >>> ", self.m_player_id)
                 return
@@ -147,11 +147,11 @@ function M:on_handle(pack_id, packbody)
 
         --棋子移动
         HANDLE_FUNC_TEMPLATE[PACK.chinese_chess_game.moveRes] = function(self, body)
-            log.info("收到moveRes >>> ", self.m_player_id, body)
+            --log.info("收到moveRes >>> ", self.m_player_id, body)
         end
     end
 
-    log.info("on_handle game msg >>> ", self.m_player_id, pack_id)
+    --log.info("on_handle game msg >>> ", self.m_player_id, pack_id)
     local handle = HANDLE_FUNC_TEMPLATE[pack_id]
     if not handle then
         log.warn("drop game pack_id = ", self.m_player_id, pack_id)
@@ -162,7 +162,7 @@ end
 
 --请求游戏状态
 function M:req_game_state()
-    log.info("请求游戏状态 >>> ", self.m_player_id, self.m_table_id)
+    --log.info("请求游戏状态 >>> ", self.m_player_id, self.m_table_id)
       --请求游戏状态
     local packid, packbody = self.m_game_rpc:req(PACK.chinese_chess_game.gameStateReq, {
         player_id = self.m_player_id
@@ -170,7 +170,7 @@ function M:req_game_state()
     if not packid or packid == PACK.errors.Error then
         log.warn("请求游戏状态 失败 >>> ", self.m_player_id, packid, packbody)
     else
-        log.info("请求游戏状态 成功 >>> ", self.m_player_id, "state:", packbody.state, "next_player:", packbody.next_doing and packbody.next_doing.player_id)
+        --log.info("请求游戏状态 成功 >>> ", self.m_player_id, "state:", packbody.state, "next_player:", packbody.next_doing and packbody.next_doing.player_id)
         self.m_game_data = packbody
         self:check_doing()
     end
@@ -213,7 +213,7 @@ function M:doing()
     local row = row_list[pos_index]
     local col = col_list[pos_index]
 
-    log.info("走棋 >>> ", self.m_player_id, "chess_id:", chess_id, "to row:", row, "col:", col)
+    --log.info("走棋 >>> ", self.m_player_id, "chess_id:", chess_id, "to row:", row, "col:", col)
     self.m_game_rpc:push(PACK.chinese_chess_game.moveReq, {
         chess_id = chess_id,
         move_row = row,
@@ -234,7 +234,7 @@ function M:check_doing()
         return
     end
 
-    log.info("check_doing >>> ", self.m_player_id, "next_player:", next_doing.player_id, "remain_once:", next_doing.remain_once_time)
+    --log.info("check_doing >>> ", self.m_player_id, "next_player:", next_doing.player_id, "remain_once:", next_doing.remain_once_time)
     if next_doing.player_id == self.m_player_id then
         local remain_once_time = next_doing.remain_once_time
         local left = timer.second
@@ -246,10 +246,10 @@ function M:check_doing()
             self.m_doing_timer:cancel()
         end
         local time = math.random(left, right)
-        log.info("该我操作，设置操作定时器 >>> ", self.m_player_id, "delay:", time, "remain_once:", remain_once_time)
+        --log.info("该我操作，设置操作定时器 >>> ", self.m_player_id, "delay:", time, "remain_once:", remain_once_time)
         self.m_doing_timer = timer:new(time, 1, self.doing, self)
     else
-        log.info("等待对方操作 >>> ", self.m_player_id, "next_player:", next_doing.player_id)
+        --log.info("等待对方操作 >>> ", self.m_player_id, "next_player:", next_doing.player_id)
     end
 end
 

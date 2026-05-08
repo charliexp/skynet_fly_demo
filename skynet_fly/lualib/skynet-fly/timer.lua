@@ -19,6 +19,7 @@ local tpack = table.pack
 local tunpack = table.unpack
 local skynet_now = skynet.now
 local skynet_timeout = skynet.timeout
+local skynet_fork = skynet.fork
 local string_format = string.format
 
 ----------------------------------------------------------------------------------------
@@ -40,7 +41,7 @@ local string_format = string.format
 -- 超出范围的定时器自动挂载到 tv4 最后一个槽（延迟触发，语义等同于"尽快触发"）
 --
 -- 性能优化：
---   P0: 模块级复用 pending_readd，消除每次 dispatch 的 table 分配
+--   P0: 栈式复用 pending_readd，消除每次 dispatch 的 table 分配，同时支持重入安全
 --   P0: dispatch 中用 internal_add_raw（无 schedule_next），循环后统一调度一次
 --   P0: skynet.now/timeout 缓存为 local 变量，减少全局查找
 --   P0: 回调同步执行（xpcall），无 skynet.fork 开销
@@ -165,7 +166,8 @@ for i = 0, TV_SIZE  - 1 do tv3[i] = new_list() end
 for i = 0, TV_SIZE  - 1 do tv4[i] = new_list() end
 
 ---------------------------------------------------------------------------
--- [P0 优化] 模块级复用 pending_readd，消除每次 dispatch 的 table 分配
+-- pending_readd：收集本轮需要重新注册的循环/多次定时器
+-- 由于回调通过 skynet.fork 执行，dispatch_tick 不会让出，无需重入保护
 ---------------------------------------------------------------------------
 local pending_readd = {}
 local pending_readd_n = 0
@@ -323,8 +325,12 @@ local function execute_call_back(t)
 end
 
 ---------------------------------------------------------------------------
--- 重复注册（默认模式：基于上次 expire_time 累加）
--- 注意：此版本不调用 schedule_next（用于 dispatch 内部的 pending_readd）
+-- fork 中执行回调并在完成后尝试归还对象（用于 is_over 的最后一次触发）
+local function fork_execute_and_release(t)
+    execute_call_back(t)
+    try_release(t)
+end
+
 ---------------------------------------------------------------------------
 -- after_next 模式：基于当前时刻计算下次 expire_time（同步执行，回调完成后注册下次）
 local function execute_and_register_after_next(t)
@@ -345,10 +351,10 @@ end
 
 ---------------------------------------------------------------------------
 -- dispatch_tick：推进时间轮，触发所有到期定时器
+-- 回调通过 skynet.fork 在独立协程中执行，dispatch_tick 不会让出，无需重入保护
 ---------------------------------------------------------------------------
 dispatch_tick = function()
     local now = skynet_now()
-    -- [P0 优化] 复用模块级 pending_readd，重置计数
     pending_readd_n = 0
 
     while wheel_cur <= now do
@@ -381,15 +387,11 @@ dispatch_tick = function()
                 t.prev = nil
                 t.next = nil
 
-                -- 检查 expire_time：同步回调中可能 cancel+release 了同 slot 的后续定时器
-                -- pool_release 会将 expire_time 清为 nil，此时跳过
-                if not t.expire_time then
-                    -- 已被 pool_release，跳过
-                elseif not t.is_cancel then
+                if not t.is_cancel then
                     t.cur_times = t.cur_times + 1
                     if t.is_after_next then
-                        -- after_next 模式：同步执行回调，完成后再注册下次
-                        execute_and_register_after_next(t)
+                        -- after_next 模式：fork 中执行回调，完成后再注册下次
+                        skynet_fork(execute_and_register_after_next, t)
                     else
                         if t.times == TIMES_LOOP or t.cur_times < t.times then
                             t.expire_time = t.expire_time + t.expire
@@ -398,15 +400,16 @@ dispatch_tick = function()
                         else
                             t.is_over = true
                         end
-                        -- 同步执行回调（xpcall），不再 fork
-                        execute_call_back(t)
-                        -- [P2] is_over 时在回调完成后尝试归还
                         if t.is_over then
-                            try_release(t)
+                            -- 最后一次触发：fork 中执行回调完成后再归还对象
+                            skynet_fork(fork_execute_and_release, t)
+                        else
+                            -- 循环/多次触发：直接 fork 执行回调
+                            skynet_fork(execute_call_back, t)
                         end
                     end
                 else
-                    -- [P2] 已取消的定时器在 dispatch 中遇到，尝试归还
+                    -- 已取消的定时器尝试归还对象池
                     try_release(t)
                 end
                 t = next_t
@@ -414,12 +417,7 @@ dispatch_tick = function()
         end
     end
 
-    -- [P0 优化] 追赶完成后统一注册，使用 internal_add_raw 避免每次 schedule_next
-    -- 注意：同步执行回调时，回调内可能 cancel/extend/release 了定时器：
-    --   cancel+release → pool_release 清空所有字段（expire_time=nil）
-    --   extend → 重新 internal_add（prev 不为 nil）
-    --   cancel 但未 release → is_cancel=true
-    -- 因此需要检查 expire_time 是否存在（pool_release 后为 nil）
+    -- 追赶完成后统一注册循环定时器
     for i = 1, pending_readd_n do
         local pt = pending_readd[i]
         pending_readd[i] = nil  -- 释放引用
