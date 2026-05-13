@@ -73,9 +73,11 @@ end
 function M:game_start()
     self.m_game_state = GAME_STATE_ENUM.playing
     self.m_game_seat_id_list = {}
-    self.m_join_time_out:cancel()
-    self.m_join_time_out:release()
-    self.m_join_time_out = nil
+    if self.m_join_time_out then
+        self.m_join_time_out:cancel()
+        self.m_join_time_out:release()
+        self.m_join_time_out = nil
+    end
 
     for seat_id,seater in ipairs(self.m_seat_list) do
         if not seater:is_empty() then

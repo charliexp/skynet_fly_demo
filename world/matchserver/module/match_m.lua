@@ -92,7 +92,7 @@ local function match_one(play_type)
         --匹配成功，请求游戏服创建房间
         g_game_cli:set_svr_id(game_node_info.svr_id)
         local ret = g_game_cli:mod_call("createtable", match_list, cur_time, play_type) --创建桌子
-        --log.info("match_loop >>> ", ret)
+        log.info("match_loop >>> ", ret)
         if ret and #ret.result > 0 then
             local table_id = ret.result[1]
             local token_list = ret.result[2]
@@ -300,9 +300,11 @@ end
 
 function CMD.fix_exit()
     --确定退出了，就可以取消定时器了
-    g_match_loop_timer:cancel()
-    g_match_loop_timer:release()
-    g_match_loop_timer = nil
+    if g_match_loop_timer then
+        g_match_loop_timer:cancel()
+        g_match_loop_timer:release()
+        g_match_loop_timer = nil
+    end
 end
 
 function CMD.exit()

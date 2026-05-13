@@ -90,7 +90,9 @@ function CMD.start()
 end
 
 function CMD.fix_exit()
-    g_timer:cancel()
+    if g_timer then
+        g_timer:cancel()
+    end
 end
 
 function CMD.exit()

@@ -202,9 +202,11 @@ function M:game_start()
     --log.info("游戏开始 >>> ", self.m_table_id)
     self.m_game_state = GAME_STATE.playing
     self.m_game_seat_id_list = {}
-    self.m_join_time_out:cancel()
-    self.m_join_time_out:release()
-    self.m_join_time_out = nil
+    if self.m_join_time_out then
+        self.m_join_time_out:cancel()
+        self.m_join_time_out:release()
+        self.m_join_time_out = nil
+    end
 
     local rand_num = math.random(1,2)
     local next_doing_seat_id = nil

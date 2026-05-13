@@ -105,9 +105,11 @@ function M.init(alloc_interface) --初始化
 end
 
 function M.fix_exit()
-	g_timer_obj:cancel()
-	g_timer_obj:release()
-	g_timer_obj = nil
+	if g_timer_obj then
+		g_timer_obj:cancel()
+		g_timer_obj:release()
+		g_timer_obj = nil
+	end
 end
 
 function M.match(player_id) --匹配
