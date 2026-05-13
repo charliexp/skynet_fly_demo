@@ -99,6 +99,7 @@ function M.init(alloc_interface) --初始化
 		local confclient = container_client:new("share_config_m")
         local room_game_login = confclient:mod_call('query','room_game_login')
         g_info.host = room_game_login.wsgateconf.host
+		g_isneed_pub = true
 	end)
 
 	g_timer_obj = timer:new_loop(timer.second * 5, syn_alloc_info)
