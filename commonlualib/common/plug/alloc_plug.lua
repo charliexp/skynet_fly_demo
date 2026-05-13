@@ -101,11 +101,13 @@ function M.init(alloc_interface) --初始化
         g_info.host = room_game_login.wsgateconf.host
 	end)
 
-	g_timer_obj = timer:new(timer.second * 5, timer.loop, syn_alloc_info)
+	g_timer_obj = timer:new_loop(timer.second * 5, syn_alloc_info)
 end
 
 function M.fix_exit()
 	g_timer_obj:cancel()
+	g_timer_obj:release()
+	g_timer_obj = nil
 end
 
 function M.match(player_id) --匹配

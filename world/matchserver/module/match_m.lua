@@ -288,7 +288,7 @@ function CMD.start(config)
     skynet.fork(function()
         g_game_cli = frpc_client:new(frpc_client.FRPC_MODE.byid, config.instance_name, "room_game_alloc_m")
         --匹配循环
-        g_match_loop_timer = timer:new(timer.second * 5, 0, match_loop)
+        g_match_loop_timer = timer:new_loop(timer.second * 5, match_loop)
         --执行完再注册下一次
         g_match_loop_timer:after_next()
     end)
@@ -301,6 +301,8 @@ end
 function CMD.fix_exit()
     --确定退出了，就可以取消定时器了
     g_match_loop_timer:cancel()
+    g_match_loop_timer:release()
+    g_match_loop_timer = nil
 end
 
 function CMD.exit()

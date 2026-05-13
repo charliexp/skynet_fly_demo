@@ -123,7 +123,7 @@ local function create_one_robot_logic(idx)
     m_HALL_SERVER_HANDLE[PACK.hallserver_match.MatchGameNotice] = function(body)
         --log.info("收到匹配成功通知 >>> ", idx, m_player_id)
         --请求接受匹配
-        timer:new(math.random(1, 10) * timer.second, 1, accept_match, body)
+        timer:once(math.random(1, 10) * timer.second, accept_match, body)
     end
     
     --通知进入游戏
@@ -218,6 +218,8 @@ local function create_one_robot_logic(idx)
     m_STATE_HANDLE[STATE_ENUM.UNLOGIN_HALL] = function()
         if m_hall_heart_timer then
             m_hall_heart_timer:cancel()
+            m_hall_heart_timer:release()
+            m_hall_heart_timer = nil
         end
         --log.info("尝试登录大厅 >>> ", idx, m_account)
         --尝试登录
@@ -269,12 +271,14 @@ local function create_one_robot_logic(idx)
                     --发送心跳包
                     if m_hall_heart_timer then
                         m_hall_heart_timer:cancel()
+                        m_hall_heart_timer:release()
+                        m_hall_heart_timer = nil
                     end
 
                     local heart_req = {
                         time = nil
                     }
-                    m_hall_heart_timer = timer:new(timer.second * 5, 0, function()
+                    m_hall_heart_timer = timer:new_loop(timer.second * 5, function()
                         heart_req.time = time_util.time()
                         local pre_time = skynet.now()
                         local packid = m_hall_rpc:req(PACK.login.HeartReq, heart_req)
@@ -283,6 +287,7 @@ local function create_one_robot_logic(idx)
                             websocket.close(m_hall_fd)
                             if m_hall_heart_timer then
                                 m_hall_heart_timer:cancel()
+                                m_hall_heart_timer:release()
                                 m_hall_heart_timer = nil
                             end
                         else
@@ -383,7 +388,7 @@ local function create_one_robot_logic(idx)
         assert(handle, "not exists handle = " .. m_state)
         handle()
     end
-    local m_loop_timer = timer:new(timer.second * 5, 0, state_loop)   --5秒一次状态循环
+    local m_loop_timer = timer:new_loop(timer.second * 5, state_loop)   --5秒一次状态循环
     m_loop_timer:after_next()
 end
 

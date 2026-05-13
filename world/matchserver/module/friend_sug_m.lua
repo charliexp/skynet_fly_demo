@@ -44,13 +44,15 @@ end
 
 function CMD.start()
     skynet.fork(sys_online_player)
-    g_time_obj = timer:new(timer.minute * 1, 0, sys_online_player)
+    g_time_obj = timer:new_loop(timer.minute * 1, sys_online_player)
     return true
 end
 
 function CMD.fix_exit()
     if g_time_obj then
         g_time_obj:cancel()
+        g_time_obj:release()
+        g_time_obj = nil
     end
 end
 

@@ -41,7 +41,7 @@ function M.on_login(player_id)
     tinsert(g_player_list, player_id)
 
     --登录后10秒没有进入房间则踢掉
-    g_player_map[player_id].join_check_timer = timer:new(timer.second * 10, 1, function()
+    g_player_map[player_id].join_check_timer = timer:once(timer.second * 10, function()
         if not g_player_map[player_id] then
             return  --玩家已经登出，无需处理
         end
@@ -59,6 +59,7 @@ function M.on_loginout(player_id)
     assert(g_player_map[player_id], "is not exists " .. player_id)
     if g_player_map[player_id].join_check_timer then
         g_player_map[player_id].join_check_timer:cancel()
+        g_player_map[player_id].join_check_timer:release()
         g_player_map[player_id].join_check_timer = nil
     end
     g_player_map[player_id] = nil

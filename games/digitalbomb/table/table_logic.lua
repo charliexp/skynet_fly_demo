@@ -37,7 +37,7 @@ function M:new(interface_mgr, table_conf, table_id)
     }
 
 	if table_id ~= 1 then  --测试创建
-		t.m_join_time_out = timer:new(timer.minute, 1, M.dismisstable, t)
+		t.m_join_time_out = timer:once(timer.minute, M.dismisstable, t)
 	end
 
     for i = 1,table_conf.player_num do
@@ -74,6 +74,8 @@ function M:game_start()
     self.m_game_state = GAME_STATE_ENUM.playing
     self.m_game_seat_id_list = {}
     self.m_join_time_out:cancel()
+    self.m_join_time_out:release()
+    self.m_join_time_out = nil
 
     for seat_id,seater in ipairs(self.m_seat_list) do
         if not seater:is_empty() then

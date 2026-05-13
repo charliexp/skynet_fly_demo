@@ -49,11 +49,14 @@ function M:clear()
     self.m_send_msg = nil
     if self.m_doing_timer then
         self.m_doing_timer:cancel()
+        self.m_doing_timer:release()
+        self.m_doing_timer = nil
     end
     if self.m_heart_timer then
         self.m_heart_timer:cancel()
+        self.m_heart_timer:release()
+        self.m_heart_timer = nil
     end
-    self.m_heart_timer = nil
 end
 
 --建立连接
@@ -75,12 +78,14 @@ function M:on_connect(player_id, table_id, token, game_rpc)
         --发送心跳包
         if self.m_heart_timer then
             self.m_heart_timer:cancel()
+            self.m_heart_timer:release()
+            self.m_heart_timer = nil
         end
 
         local heart_req = {
             time = nil
         }
-        self.m_heart_timer = timer:new(timer.second * 5, 0, function()
+        self.m_heart_timer = timer:new_loop(timer.second * 5, function()
             heart_req.time = time_util.time()
             local packid = game_rpc:req(PACK.login.HeartReq, heart_req)
             if not packid or packid == PACK.errors.Error then
@@ -160,7 +165,7 @@ function M:check_doing()
         
         local time = math.random(left, right)
         --log.info("check_doing >>>> ", time)
-        self.m_doing_timer = timer:new(time, 1, self.doing, self)
+        self.m_doing_timer = timer:once(time, self.doing, self)
     end
 end
 

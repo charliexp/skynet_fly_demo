@@ -53,10 +53,12 @@ function M:clear()
     self.m_game_data = nil
     if self.m_doing_timer then
         self.m_doing_timer:cancel()
+        self.m_doing_timer:release()
         self.m_doing_timer = nil
     end
     if self.m_heart_timer then
         self.m_heart_timer:cancel()
+        self.m_heart_timer:release()
         self.m_heart_timer = nil
     end
 end
@@ -83,12 +85,14 @@ function M:on_connect(player_id, table_id, token, game_rpc, close_game_fd_func)
          --发送心跳包
          if self.m_heart_timer then
             self.m_heart_timer:cancel()
+            self.m_heart_timer:release()
+            self.m_heart_timer = nil
         end
 
         local heart_req = {
             time = nil
         }
-        self.m_heart_timer = timer:new(timer.second * 5, 0, function()
+        self.m_heart_timer = timer:new_loop(timer.second * 5, function()
             heart_req.time = time_util.time()
             local pre_time = skynet.now()
             local packid = game_rpc:req(PACK.login.HeartReq, heart_req)
@@ -244,10 +248,12 @@ function M:check_doing()
         end
         if self.m_doing_timer then
             self.m_doing_timer:cancel()
+            self.m_doing_timer:release()
+            self.m_doing_timer = nil
         end
         local time = math.random(left, right)
         --log.info("该我操作，设置操作定时器 >>> ", self.m_player_id, "delay:", time, "remain_once:", remain_once_time)
-        self.m_doing_timer = timer:new(time, 1, self.doing, self)
+        self.m_doing_timer = timer:once(time, self.doing, self)
     else
         --log.info("等待对方操作 >>> ", self.m_player_id, "next_player:", next_doing.player_id)
     end

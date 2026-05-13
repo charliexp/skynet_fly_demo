@@ -62,7 +62,7 @@ function M:new(table_id, m_interface_mgr, play_type)
             win_player_id = nil,   --赢家
         },
         
-        m_join_time_out = timer:new(timer.minute, 1, m_interface_mgr.kick_out_all, m_interface_mgr, "join time out"),
+        m_join_time_out = timer:once(timer.minute, m_interface_mgr.kick_out_all, m_interface_mgr, "join time out"),
 
         --棋子数据
         m_chess_list = {},                     --棋子数据
@@ -203,6 +203,8 @@ function M:game_start()
     self.m_game_state = GAME_STATE.playing
     self.m_game_seat_id_list = {}
     self.m_join_time_out:cancel()
+    self.m_join_time_out:release()
+    self.m_join_time_out = nil
 
     local rand_num = math.random(1,2)
     local next_doing_seat_id = nil

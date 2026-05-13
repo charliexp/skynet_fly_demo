@@ -155,7 +155,7 @@ function CMD.start()
         end)
     end)
 
-    g_timer = timer:new(timer.second * 5, 0, function()
+    g_timer = timer:new_loop(timer.second * 5, function()
         queue(check_loop)
     end):after_next()
 
@@ -165,6 +165,8 @@ end
 function CMD.fix_exit()
     if g_timer then
         g_timer:cancel()
+        g_timer:release()
+        g_timer = nil
     end
 end
 

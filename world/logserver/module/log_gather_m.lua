@@ -149,6 +149,8 @@ local function create_gather_loop(cluster_name, use_log_info)
     local pre_timer = g_loop_timer_map[time_key]
     if pre_timer then
         pre_timer:cancel()
+        pre_timer:release()
+        g_loop_timer_map[time_key] = nil
     end
 
     local file_path = use_log_info.file_path
@@ -280,7 +282,7 @@ local function create_gather_loop(cluster_name, use_log_info)
     end
 
     local interval = g_config.gather_interval_base + math.random(1, g_config.gather_interval_random)
-    local new_timer = timer:new(timer.second * interval, 0, xp_gather_logic):after_next()
+    local new_timer = timer:new_loop(timer.second * interval, xp_gather_logic):after_next()
 
     g_loop_timer_map[time_key] = new_timer
 end
@@ -328,7 +330,7 @@ function CMD.start(config)
     end
 
     -- 重试插入数据定时器
-    timer:new(timer.second * g_config.retry_interval, 0, try_insert_data, g_config.retry_batch_size)
+    timer:new_loop(timer.second * g_config.retry_interval, try_insert_data, g_config.retry_batch_size)
 
     -- 每天定时清理过期数据
     g_timer_point = timer_point:new(timer_point.EVERY_DAY):builder(function()
@@ -358,8 +360,10 @@ function CMD.fix_exit()
         watch_syn_client.unpwatch(svr_name, SYN_CHANNEL_NAME.log_desc_info .. '*', "handle_name_1")
     end
     
-    for _,timer in pairs(g_loop_timer_map) do
+    for k,timer in pairs(g_loop_timer_map) do
         timer:cancel()
+        timer:release()
+        g_loop_timer_map[k] = nil
     end
 
     if g_gater_ormobj then
@@ -386,8 +390,10 @@ skynet_util.reg_shutdown_func(function()
         watch_syn_client.unpwatch(svr_name, SYN_CHANNEL_NAME.log_desc_info .. '*', "handle_name_1")
     end
 
-    for _,timer in pairs(g_loop_timer_map) do
+    for k,timer in pairs(g_loop_timer_map) do
         timer:cancel()
+        timer:release()
+        g_loop_timer_map[k] = nil
     end
 
     log.info("log_gather_m >>> try_insert_data begin")

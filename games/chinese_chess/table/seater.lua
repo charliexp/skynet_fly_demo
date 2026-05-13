@@ -125,9 +125,9 @@ end
 --开始操作
 function M:start_doing(time_out_callback, ...)
 	if self.remain_total_time > self.once_time then
-		self.time_obj = timer:new(self.once_time, 1, time_out_callback, ...)
+		self.time_obj = timer:once(self.once_time, time_out_callback, ...)
 	else
-		self.time_obj = timer:new(self.remain_total_time, 1, time_out_callback, ...)
+		self.time_obj = timer:once(self.remain_total_time, time_out_callback, ...)
 	end
 end
 
@@ -152,6 +152,7 @@ function M:doing_end()
 		self.remain_total_time = 0
 	end
 	self.time_obj:cancel()
+	self.time_obj:release()
 	self.time_obj = nil
 end
 
