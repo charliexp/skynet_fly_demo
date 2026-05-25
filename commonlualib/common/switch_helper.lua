@@ -19,12 +19,12 @@ local M = {}
 
 --获取开关状态
 function M.get_switch()
-    return g_server_info.switch or SERVER_SWITCH_STATUS.CLOSE
+    return g_server_info.toggle or SERVER_SWITCH_STATUS.CLOSE
 end
 
 --是否开启
 function M.is_open()
-    return g_server_info.switch == SERVER_SWITCH_STATUS.OPEN
+    return g_server_info.toggle == SERVER_SWITCH_STATUS.OPEN
 end
 
 return M

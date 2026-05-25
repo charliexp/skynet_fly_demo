@@ -30,10 +30,10 @@ local function change_status(cluster_name, server_info, status)
     watch_server.pubsyn(SYN_CHANNEL_NAME.server_info .. cluster_name, cluster_name, server_info)
 end
 
-local function change_switch(cluster_name, server_info, switch)
-    log.info_fmt("change_switch cluster_name[%s] switch[%s]", cluster_name, switch)
-    g_server_info_client:change_switch(cluster_name, switch)
-    server_info.switch = switch
+local function change_switch(cluster_name, server_info, toggle)
+    log.info_fmt("change_switch cluster_name[%s] toggle[%s]", cluster_name, toggle)
+    g_server_info_client:change_switch(cluster_name, toggle)
+    server_info.toggle = toggle
     watch_server.pubsyn(SYN_CHANNEL_NAME.server_info .. cluster_name, cluster_name, server_info)
     return true
 end
@@ -71,31 +71,31 @@ end
 local CMD = {}
 
 --改变开关状态
-function CMD.change_switch(cluster_name, switch)
+function CMD.change_switch(cluster_name, toggle)
     local server_info = g_server_info_map[cluster_name]
     if not server_info then
-        log.error_fmt("change_switch not server_info cluster_name[%s] switch[%s]", cluster_name, switch)
+        log.error_fmt("change_switch not server_info cluster_name[%s] toggle[%s]", cluster_name, toggle)
         return false
     end
-    if not SERVER_SWITCH_STATUS[switch] then
-        log.error_fmt("change_switch not status cluster_name[%s] switch[%s]", cluster_name, switch)
+    if not SERVER_SWITCH_STATUS[toggle] then
+        log.error_fmt("change_switch not status cluster_name[%s] toggle[%s]", cluster_name, toggle)
         return false
     end
-    return queue(change_switch, cluster_name, server_info, switch)
+    return queue(change_switch, cluster_name, server_info, toggle)
 end
 
-local function change_all_switch(switch)
+local function change_all_switch(toggle)
     for cluster_name, server_info in pairs(g_server_info_map) do
-        if server_info.switch ~= switch then
-            change_switch(cluster_name, server_info, switch)
+        if server_info.toggle ~= toggle then
+            change_switch(cluster_name, server_info, toggle)
         end
     end
 
     return true
 end
 --一键改变开关状态
-function CMD.change_all_switch(switch)
-    return queue(change_all_switch, switch)
+function CMD.change_all_switch(toggle)
+    return queue(change_all_switch, toggle)
 end
 
 local function add_white(player_id)

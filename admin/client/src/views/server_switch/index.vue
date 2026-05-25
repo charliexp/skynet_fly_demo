@@ -25,7 +25,7 @@
 
                 <el-table-column  label="服务开关" >
                     <template slot-scope="scope">
-                        <el-radio-group v-model="scope.row.switch" @change="handleChange(scope)">
+                        <el-radio-group v-model="scope.row.toggle" @change="handleChange(scope)">
                             <el-radio :label="0" >关闭</el-radio>
                             <el-radio :label="1" >关闭入口</el-radio>
                             <el-radio :label="2">白名单</el-radio>
@@ -98,7 +98,7 @@ export default {
             let list = []
             for (let key in res.data) {
                 let info = res.data[key]
-                info.preVal = info.switch
+                info.preVal = info.toggle
                 list.push(info)
             }
 
@@ -119,18 +119,18 @@ export default {
             this.serverInfoList = list
        },
 
-       async changeSwitch(cluster_name, switchVal) {
+       async changeSwitch(cluster_name, toggleVal) {
             let res = await changeSwitch({
                 cluster_name : cluster_name,
-                switch : switchVal,
+                toggle : toggleVal,
             })
             let result = res.data.result
             return result
        },
 
-       async changeAllSwitch(switchVal) {
+       async changeAllSwitch(toggleVal) {
             let res = await changeAllSwitch({
-                switch : switchVal,
+                toggle : toggleVal,
             })
             let result = res.data.result
             return result
@@ -145,7 +145,7 @@ export default {
        },
 
         handleChange(scope) {
-            let switchNum = Number(scope.row.switch)
+            let switchNum = Number(scope.row.toggle)
             this.$confirm("您确定要调整为" + switchNameMap[switchNum] + "状态吗？", "开关调整", {
                 confirmButtonText: '确定',
                 cancelButtonText: '取消',
@@ -159,21 +159,21 @@ export default {
                             message: '操作成功'
                         });
                     } else {
-                        scope.row.switch = scope.row.preVal
+                        scope.row.toggle = scope.row.preVal
                         this.$message({
                             type: 'info',
                             message: '操作失败'
                         });         
                     }
                 }).catch(()=>{
-                    scope.row.switch = scope.row.preVal
+                    scope.row.toggle = scope.row.preVal
                     this.$message({
                         type: 'info',
                         message: '操作失败'
                     });   
                 })
             }).catch(() => {
-                scope.row.switch = scope.row.preVal
+                scope.row.toggle = scope.row.preVal
                 this.$message({
                     type: 'info',
                     message: '已取消操作'
@@ -193,7 +193,7 @@ export default {
                     if (result == true) {
                         for (let i = 0; i < this.serverInfoList.length; i++) {
                             let info = this.serverInfoList[i]
-                            info.switch = switchNum
+                            info.toggle = switchNum
                         }
                         this.$message({
                             type: 'success',

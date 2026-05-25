@@ -18,13 +18,13 @@ function CMD.get_all_server_info()
 end
 
 --修改服务开关状态
-function CMD.change_switch(cluster_name, switch)
-    return frpc_client:instance(frpc_client.FRPC_MODE.one, 'centerserver', 'server_info_m'):balance_call('change_switch', cluster_name, switch)
+function CMD.change_switch(cluster_name, toggle)
+    return frpc_client:instance(frpc_client.FRPC_MODE.one, 'centerserver', 'server_info_m'):balance_call('change_switch', cluster_name, toggle)
 end
 
 --一键修改开关状态
-function CMD.change_all_switch(switch)
-    return frpc_client:instance(frpc_client.FRPC_MODE.one,'centerserver', 'server_info_m'):balance_call('change_all_switch', switch)
+function CMD.change_all_switch(toggle)
+    return frpc_client:instance(frpc_client.FRPC_MODE.one,'centerserver', 'server_info_m'):balance_call('change_all_switch', toggle)
 end
 
 --获取白名单map

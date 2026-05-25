@@ -21,13 +21,13 @@ return function(group)
     group:post('/change_switch', function(c)
         local body = c.req.body
         local cluster_name = body.cluster_name
-        local switch = body.switch
-        if not SERVER_SWITCH_STATUS[switch] then
-            rsp_body.set_rsp(c, nil, CODE.ERR_PARAM, "not switch status")
+        local toggle = body.toggle
+        if not SERVER_SWITCH_STATUS[toggle] then
+            rsp_body.set_rsp(c, nil, CODE.ERR_PARAM, "not toggle status")
             return
         end
 
-        local ret, errno, errmsg = container_client:instance('server_info_m'):mod_call('change_switch', cluster_name, switch)
+        local ret, errno, errmsg = container_client:instance('server_info_m'):mod_call('change_switch', cluster_name, toggle)
         if not ret then
             log.error("change_switch err ", errno, errmsg)
             rsp_body.set_rsp(c, nil, CODE.ERR_SERVER, "err server")
@@ -41,13 +41,13 @@ return function(group)
     permission_mid.set('post', group:calculate_absolute_convert_path('/change_all_switch'), '/server_switch/index')
     group:post('/change_all_switch', function(c)
         local body = c.req.body
-        local switch = body.switch
-        if not SERVER_SWITCH_STATUS[switch] then
-            rsp_body.set_rsp(c, nil, CODE.ERR_PARAM, "not switch status")
+        local toggle = body.toggle
+        if not SERVER_SWITCH_STATUS[toggle] then
+            rsp_body.set_rsp(c, nil, CODE.ERR_PARAM, "not toggle status")
             return
         end
 
-        local ret, errno, errmsg = container_client:instance('server_info_m'):mod_call('change_all_switch', switch)
+        local ret, errno, errmsg = container_client:instance('server_info_m'):mod_call('change_all_switch', toggle)
         if not ret then
             log.error("change_all_switch err ", errno, errmsg)
             rsp_body.set_rsp(c, nil, CODE.ERR_SERVER, "err server")

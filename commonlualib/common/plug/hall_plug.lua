@@ -270,11 +270,11 @@ function M.handle_before(player_id, pack_id, pack_body, rsp_session)
 
 	if not g_switch_ignore_map[pack_id] then
 		--判定开关
-		local switch = switch_helper.get_switch()
-		if switch == SERVER_SWITCH_STATUS.CLOSE or switch == SERVER_SWITCH_STATUS.CLOSE_JOIN then	--关闭状态
+		local toggle = switch_helper.get_switch()
+		if toggle == SERVER_SWITCH_STATUS.CLOSE or toggle == SERVER_SWITCH_STATUS.CLOSE_JOIN then	--关闭状态
 			errors_msg:errors(player_id, errorcode.SERVER_CLOSE, "SERVER_CLOSE", pack_id, rsp_session)
 			return false
-		elseif switch == SERVER_SWITCH_STATUS.WHITE then
+		elseif toggle == SERVER_SWITCH_STATUS.WHITE then
 			if not white_helper.is_white(player_id) then
 				errors_msg:errors(player_id, errorcode.SERVER_CLOSE, "SERVER_CLOSE", pack_id, rsp_session)
 				return false

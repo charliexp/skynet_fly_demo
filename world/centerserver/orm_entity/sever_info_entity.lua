@@ -17,7 +17,7 @@ function M.init()
     g_ormobj = ormtable:new("server_info")
     :string64('cluster_name')       --集群名
     :uint8('status')                --服务状态 0未开启  1已开启
-    :uint8('switch')                --服务开关 0关闭 1关闭入口状态 2白名单 3开启
+    :uint8('toggle')                --服务开关 0关闭 1关闭入口状态 2白名单 3开启
     :set_keys("cluster_name")
     :set_cache(0, 500)              --永久缓存，5秒同步一次更改
     :builder(adapter)
@@ -29,7 +29,7 @@ end
 function handle.get_server_info(cluster_name)
     local entry = g_ormobj:get_one_entry(cluster_name)
     if not entry then
-        entry = g_ormobj:create_one_entry({cluster_name = cluster_name, status = 1, switch = SERVER_SWITCH_STATUS.OPEN})
+        entry = g_ormobj:create_one_entry({cluster_name = cluster_name, status = 1, toggle = SERVER_SWITCH_STATUS.OPEN})
     end
 
     return entry:get_entry_data()
@@ -47,13 +47,13 @@ function handle.change_status(cluster_name, status)
 end
 
 --改变开关值
-function handle.change_switch(cluster_name, switch)
+function handle.change_switch(cluster_name, toggle)
     local entry = g_ormobj:get_one_entry(cluster_name)
     if not entry then
         return false
     end
 
-    entry:set('switch', switch)
+    entry:set('toggle', toggle)
     return true
 end
 
